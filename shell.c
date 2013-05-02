@@ -1,3 +1,17 @@
+/*
+    Implements a simple shell for UNIX.
+
+    Commands built-in are cd (change directory) and exit. Other programs to run
+    are executed as child processes.
+
+    The program assumes no input longer than 70 characters and 5 arguments along with the given command.
+
+    Authors:
+    Christoffer Gunning, cgunning@kth.se
+    Daniel Forslund, dforsl@kth.se
+
+    Last changes made 2013-05-02
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,7 +85,7 @@ void tokenize(char* str, char* tokens[]) {
     int i;
 
     tokens[0] = strtok(str, " ");
-    for(i = 1; i < 5; i++){
+    for(i = 1; i < 6; i++){
         tokens[i] = strtok(NULL, " ");
     }
 
@@ -82,7 +96,7 @@ void tokenize(char* str, char* tokens[]) {
 */
 bool is_background_process(char *tokens[]) {
     int i;
-    for(i = 1; i < 5 && tokens[i] != NULL; i++)
+    for(i = 1; i < 6 && tokens[i] != NULL; i++)
         if(strcmp(tokens[i], "&") == 0)
             return true;
 
@@ -117,7 +131,7 @@ void change_dir(char *dir) {
 /*
     Main function of the program. Takes user input and spawnes processes for the given commands.
 */
-int main (void) {
+int main(void) {
     /* 
         res = return values of function calls
         status = status variable for child processes
@@ -161,7 +175,7 @@ int main (void) {
         }
 
         /* Tokenize the input */
-        char* args[5];
+        char* args[6];
         tokenize(buffer, args);
 
         /*
