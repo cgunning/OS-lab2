@@ -97,8 +97,10 @@ void tokenize(char* str, char* tokens[]) {
 bool is_background_process(char *tokens[]) {
     int i;
     for(i = 1; i < 6 && tokens[i] != NULL; i++)
-        if(strcmp(tokens[i], "&") == 0)
+        if(strcmp(tokens[i], "&") == 0) {
+            tokens[i] = NULL; /* Remove the ampersand from the arguments list */
             return true;
+        }
 
     return false;
 }

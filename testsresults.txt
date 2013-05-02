@@ -1,0 +1,42 @@
+daniel@daniel-laptop:~/kurser/os13/os13/OS-lab2$ gcc --version
+gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
+Copyright (C) 2011 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+daniel@daniel-laptop:~/kurser/os13/os13/OS-lab2$ gcc -Wall shell.c -o shell
+daniel@daniel-laptop:~/kurser/os13/os13/OS-lab2$ ./shell 
+/home/daniel/kurser/os13/os13/OS-lab2> ls
+Spawned foreground process with PID 3403
+count.html  shell  shell.c
+Forground process 3403 terminated
+Time of execution: 2.064 ms
+/home/daniel/kurser/os13/os13/OS-lab2> cd ..
+/home/daniel/kurser/os13/os13> cd OS-lab2            
+/home/daniel/kurser/os13/os13/OS-lab2> ls
+Spawned foreground process with PID 3404
+count.html  shell  shell.c
+Forground process 3404 terminated
+Time of execution: 2.874 ms
+/home/daniel/kurser/os13/os13/OS-lab2> sleep 10 &
+Spawned background process pid: 3703
+/home/daniel/kurser/os13/os13/OS-lab2> sleep 10 &
+Spawned background process pid: 3704 
+/home/daniel/kurser/os13/os13/OS-lab2> sleep 10 &
+Spawned background process pid: 3705 
+/home/daniel/kurser/os13/os13/OS-lab2> sleep 10 &
+Spawned background process pid: 3706 
+/home/daniel/kurser/os13/os13/OS-lab2> sleep 10 &
+Spawned background process pid: 3707 
+/home/daniel/kurser/os13/os13/OS-lab2> ls
+Spawned foreground process pid: 3716 
+count.html  shell  shell.c
+Foreground process 3716 terminated 
+Time of execution:	2.055 ms 
+Background process 3703 terminated with the status 0 
+Background process 3704 terminated with the status 0 
+Background process 3705 terminated with the status 0 
+Background process 3706 terminated with the status 0 
+Background process 3707 terminated with the status 0 
+/home/daniel/kurser/os13/os13/OS-lab2> exit
+daniel@daniel-laptop:~/kurser/os13/os13/OS-lab2$ 
