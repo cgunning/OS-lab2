@@ -5,30 +5,54 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <errno.h>
-#include <sys/wait.h> /* definierar bland annat WIFEXITED */
+#include <sys/wait.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define OK       0
 #define NO_INPUT 1
 #define TOO_LONG 2
 #define DELIMITERS '\s'
+#define EXIT_CMD "exit"
 
-int status;
+/*
+    Prompts the users current location
+*/
+void prompt() {
+    char my_cwd[1024];
+    getcwd(my_cwd, 1024);
 
-static int getLine (char *prmpt, char *buff, size_t sz) {
+    fputs(my_cwd, stdout);
+    fputs("> ", stdout);
+    fflush(stdout);
+}
+
+/* Blocks ctrl-c */
+void handle_signal(int signo) {
+    printf("\n");
+
+    prompt();
+}
+
+/*
+    Reads input from the command line
+*/
+static int getLine (char *buffer, size_t size) {
     int ch, extra;
 
-    // Get line with buffer overrun protection.
-    if (prmpt != NULL) {
-        printf ("%s> ", prmpt);
-        fflush (stdout);
-    }
-    if (fgets (buff, sz, stdin) == NULL)
-        return NO_INPUT;
+    /* Wait for input */
+    fgets (buffer, size, stdin);
 
-    // If it was too long, there'll be no newline. In that case, we flush
-    // to end of line so that excess doesn't affect the next call.
-    if (buff[strlen(buff)-1] != '\n') {
+     /* Verify that the input is not empty */
+    if(buffer[0] == '\n') {
+        return NO_INPUT;
+    }
+
+    /* 
+        If it was too long, there'll be no newline. In that case, we flush
+        to end of line so that excess doesn't affect the next call. 
+    */
+    if (buffer[strlen(buffer)-1] != '\n') {
         extra = 0;
         while (((ch = getchar()) != '\n') && (ch != EOF))
             extra = 1;
@@ -36,86 +60,181 @@ static int getLine (char *prmpt, char *buff, size_t sz) {
     }
 
     // Otherwise remove newline and give string back to caller.
-    buff[strlen(buff)-1] = '\0';
+    buffer[strlen(buffer)-1] = '\0';
     return OK;
 }
 
-void tokenize(char *str, char *tokens[]) {
+/*
+    Tokenizes a string by defined delimiters
+*/
+void tokenize(char* str, char* tokens[]) {
     int i;
+
     tokens[0] = strtok(str, " ");
     for(i = 1; i < 5; i++){
         tokens[i] = strtok(NULL, " ");
     }
+
 }
 
-int main (void) {
-    int rc;
-    char buff[100];
+/*
+    Find out whether a command is to be run as a background process or not
+*/
+bool is_background_process(char *tokens[]) {
+    int i;
+    for(i = 1; i < 5 && tokens[i] != NULL; i++)
+        if(strcmp(tokens[i], "&") == 0)
+            return true;
 
-    while(strcmp(buff, "exit")) {
-        char my_cwd[1024];
-        getcwd(my_cwd, 1024);
-        rc = getLine(my_cwd, buff, sizeof(buff));
-        if (rc == NO_INPUT) {
-            // Extra NL since my system doesn't output that on EOF.
-            printf ("\nNo input\n");
-            return 1;
-        }
+    return false;
+}
 
-        if (rc == TOO_LONG) {
-            printf ("Input too long [%s]\n", buff);
-            return 1;
-        }
-
-        char *tokens[5]; 
-        tokenize(buff, tokens);
-
-        if(strcmp(tokens[0], "cd") == 0) {
-            printf("Change dir\n");
-            int ret = chdir (tokens[1]);
-            if (ret ==0) {
-                printf("good\n");
-            } else {
-                printf("bad\n");
-            }
-        } else {
-            pid_t pid = fork(); /* Create new process */
-
-            if (pid == 0) { /* Code for child processes*/
-                /* Execute current filter, print error message and exit on error */        
-
-                execvp(tokens[0], tokens);
-
-                /* If this is executed execlp has failed */
-                perror("error");
-                _exit(EXIT_FAILURE);
-            }
-
-            printf("PID: %d\n", pid);
-
-            int childpid = wait( &status ); /* Vänta på ena child-processen */
-            if( -1 == childpid )
-            { perror( "wait() failed unexpectedly" ); exit( 1 ); }
-
-            if( WIFEXITED( status ) ) /* child-processen har kört klart */
-            {
-                int child_status = WEXITSTATUS( status );
-                if( 0 != child_status ) /* child had problems */
-                {
-                    fprintf( stderr, "Child (pid %ld) failed with exit code %d\n",
-                           (long int) childpid, child_status );
-                }
-            }
-            else
-            {
-                if( WIFSIGNALED( status ) ) /* child-processen avbröts av signal */
-                {
-                    int child_signal = WTERMSIG( status );
-                    fprintf( stderr, "Child (pid %ld) was terminated by signal no. %d\n",
-                           (long int) childpid, child_signal );
-                }
-            }
+/*
+    Removes any terminated background child processes by running waitpid for each background
+    process not already removed.
+*/
+void remove_terminated_processes(int* num_children) {
+    int i, status, num_removed;
+    for(i = 0; i < *num_children; i++) {
+        pid_t child_pid = waitpid(-1, &status, WNOHANG);
+        if(child_pid >  0) {
+            printf("Background process %d has terminated with the status %d\n", child_pid, status);
+            num_removed++;
         }
     }
+
+    *num_children -= num_removed;
+}
+
+/*
+    Change the current working directory
+*/
+void change_dir(char *dir) {
+    if (chdir(dir) != 0)
+        printf("An error occured.\n");
+}
+
+/*
+    Main function of the program. Takes user input and spawnes processes for the given commands.
+*/
+int main (void) {
+    /* 
+        res = return values of function calls
+        status = status variable for child processes
+        num_children = current number of background child processes
+    */
+    int res, status, num_children;
+
+    /* Buffer for input */
+    char buffer[70];
+
+    /* Used to keep a reference to child processes old signal handlers */
+    struct sigaction old_action;
+
+    /* Storage of start and end times to measure foreground processes' execution time */
+    struct timeval start, finish;
+
+    /* Block Ctrl-C and declare a new signal handler */
+    signal(SIGINT, handle_signal);  
+
+    /* Run until the user gives the exit command */
+    while(1) {
+        /* Prompt */
+        prompt();
+
+        /* Read input */
+        res = getLine(buffer, sizeof(buffer));
+        
+        /* Validate the existance of input */
+        if(res == NO_INPUT)
+            continue;
+
+        /* Validate the input not being to long */
+        if(res == TOO_LONG) {
+            printf("Input too long.\n");
+            continue;
+        }
+
+        /* Check if the exit command was given */
+        if(strcmp(buffer, EXIT_CMD) == 0) {
+            exit(0);
+        }
+
+        /* Tokenize the input */
+        char* args[5];
+        tokenize(buffer, args);
+
+        /*
+            Run the given command (unless exited...). Handle the cd-command separately
+        */
+        if(strcmp(args[0], "cd") == 0) {
+            /* Change working dir */
+            change_dir(args[1]);
+        } else {
+            /* Create a child process */
+            pid_t pid = fork(); 
+            if(pid == -1)
+                perror("Failed to fork()");
+
+            /* Run in background? */
+            bool as_background = is_background_process(args);
+
+            /* Get the time of creation */
+            res = gettimeofday(&start, NULL);
+            if(res == -1)
+                printf("Failed to execute gettimeofday()");
+
+            /* Handle the forked child process */
+            if(pid == 0) { 
+                /* Allow the child process to be interrupted by SIGINT */
+                res = sigaction(SIGINT, &old_action, NULL);
+                if(res == -1) {
+                    perror("Child process failed to change sigaction");
+                    exit(1);
+                }
+
+                /* Change process group if it is to run in the background */
+                if(as_background)
+                    setpgid(0, 0);
+
+                /* Execute current filter, print error message and exit on error */        
+                execvp(args[0], args);
+
+                /* If we reached this point, execvp has failed */
+                perror("Failed to fork()");
+                _exit(EXIT_FAILURE);
+            } else if(pid > 0) {
+                if(as_background) {
+                    num_children++;
+                    printf("Spawned background process with PID %d\n", pid);
+                } 
+                else
+                    printf("Spawned foreground process with PID %d\n", pid);
+            }
+
+            /* Don't wait if it's to run in the background */
+            if(!as_background) {
+                /* Wait for the forked forground child process */
+                int childpid = wait(&status); 
+                if( -1 == childpid ) { 
+                    perror("wait() failed unexpectedly"); 
+                    exit(1); 
+                }
+
+                /* If the child is a foreground process; wait for it to finish and measure its execution time */
+                if(!as_background) {
+                    waitpid(pid, &status, 0);
+                    printf("Forground process %d terminated\n", pid);
+                    gettimeofday(&finish, NULL);
+                    double exec_time = (finish.tv_usec - start.tv_usec)/1000.00;
+                    printf("Time of execution: %.3f ms\n", exec_time);
+                }
+            }
+
+            /* Finally poll and remove terminated background processes */
+            remove_terminated_processes(&num_children);
+        }
+    }
+
     return 0;
 }
