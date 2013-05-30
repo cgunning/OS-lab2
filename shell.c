@@ -127,7 +127,7 @@ void remove_terminated_processes(int* num_children) {
 */
 void change_dir(char *dir) {
     if (chdir(dir) != 0)
-        printf("An error occured.\n");
+        chdir(getenv("HOME"));
 }
 
 /*
@@ -173,6 +173,7 @@ int main(void) {
 
         /* Check if the exit command was given */
         if(strcmp(buffer, EXIT_CMD) == 0) {
+
             exit(0);
         }
 
@@ -238,13 +239,12 @@ int main(void) {
                 }
 
                 /* If the child is a foreground process; wait for it to finish and measure its execution time */
-                if(!as_background) {
-                    waitpid(pid, &status, 0);
-                    printf("Forground process %d terminated\n", pid);
-                    gettimeofday(&finish, NULL);
-                    double exec_time = (finish.tv_usec - start.tv_usec)/1000.00;
-                    printf("Time of execution: %.3f ms\n", exec_time);
-                }
+                
+                waitpid(pid, &status, 0);
+                printf("Forground process %d terminated\n", pid);
+                gettimeofday(&finish, NULL);
+                double exec_time = (finish.tv_usec - start.tv_usec)/1000.00;
+                printf("Time of execution: %.3f ms\n", exec_time);
             }
 
             /* Finally poll and remove terminated background processes */
