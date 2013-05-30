@@ -173,7 +173,7 @@ int main(void) {
 
         /* Check if the exit command was given */
         if(strcmp(buffer, EXIT_CMD) == 0) {
-
+            kill(0, SIGTERM); //Kill the whole process group to terminate all children.
             exit(0);
         }
 
